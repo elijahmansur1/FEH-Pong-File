@@ -1,0 +1,1076 @@
+#include "FEHLCD.h"
+#include <FEHUtility.h>
+#include <stdlib.h>
+#include <iostream>
+
+// backbutton integer is in a while loop. When backbutton integer is 1, the while loop continues. This is so that the button is only
+// present when the option to back click is needed
+// paddle_size_multiple is an integer that determines the scale of the human player paddle for different difficulty levels
+int backbutton_integer, paddle_size_multiple;
+
+// i is a counting integer for the for loop for the robot paddle position and other global variables
+int global_var, ball_direction, collide = 0, e = 1, i, center_robot_position;
+float speed_multiplier = 1.0;
+
+// reports if the robot should move up or down, the amount of loops, and i is the for loop counter being reset
+int loop_amt2;
+int i2;
+int up_or_down2;
+// global vairable for if the ball just spawned its first time
+int ball_spawn = 1;
+
+// global counting vairiables for determining the game mode
+// counting wins and losses
+int robot_losses = 0, human_losses = 0;
+
+/* This class generates the paddles and the paddle movement. Drag paddle allows for the paddle to move.
+It takes four arguements which represent the position of the paddle being dragged, the direction which the ball is moving,
+and the mode. The mode represents an integer determining how large the human paddle will be.
+Talk is a communication function that allows for private vairable values to be saved to global vairables.
+Run once sets the initial robot position when a game is initialized. This class was developed by Elijah and Irvin.
+*/
+class paddle
+{
+public:
+    void drag_paddle(float x_new, float y_new, int ball_direction, int mode);
+    void talk(int i, int up_or_down, int loop_amt);
+    void run_once();
+
+private:
+    // human paddle width
+    int y_paddle_width;
+    // position where the human player clicks the screen. Reset var represents the position where the paddle
+    // should be written over when the paddle x_click and y_click position is changed
+    float x_click, y_click, reset_var;
+    // defines the y maximum and minimum values of the human paddle. These vairables are changed with difficulty levels
+    // so that the paddle will show up with different sizes. The paddle y line is the point on the x axis where
+    // the paddle is initialized
+    float paddle_minimum, paddle_maximum, paddle_y_line;
+
+    // defines the y maximum and minimum values of the robot.
+    float robot_paddle_minimum, robot_paddle_maximum;
+
+    // robot_y defines the position will the robot_y rectangle will move to with each run of its movement code
+    // robot_reset defines the position before the robot rectangle moved so this can be written ove3r
+    float robot_y, robot_reset;
+};
+
+/* This class generates the pong ball and manages the balls speed. Start Ball function represents the initial conditions.
+The velocity function represents the current position of the ball, and the mode (0 for hard, 1 for medium, 2 for hard).
+This function connects all of the game functions together and utilizes point tracking as well.
+The collision function detects collisions between the paddle and the ball. It also detects collisions with the horozontal walls
+for the game. It communicates with the velocity function to increase the speed of the ball over time and keep track of when
+someone loses the game. Elijah made this class.
+*/
+class pong_ball
+{
+public:
+    void start_ball(int x, int y);
+    void velocity(int x, int y, int mode);
+    // 0 for easy, 1 for medium, 2 for hard
+    void collision(float paddle_minimum, float paddle_maximum, float paddle_y_line, float x_new, float y_new, int ball_direction, float robot_paddle_minimum, float robot_paddle_maximum);
+
+    // robot ball tracking function
+    // 1 is up and 0 is down
+    // if 1 is designated, the ball is going to the bottom of the board
+    // ball position is in the y axis
+    void ball_tracking(float x_position, float y_position, int up_or_down);
+    void resource_tracking(bool did_human_win);
+
+private:
+    // initial pong_ball position
+    float x_in, y_in;
+    // new updated ball position
+    float x_new, y_new;
+    // the minimum and maximum y-positions of the robot paddle
+    float robot_paddle_minimum, robot_paddle_maximum;
+
+    // vairiables for tracking the pomng ball. These vairiables are used with geometry to predict where the ball will end up.
+    // y_end_position is the robots predicted end position of where the code thinks the ball will go
+    float distance_to_travel_y, distance_to_travel_x, y_end_position;
+    // amount of times the robot paddle with move with a certain incrememnt
+    int loop_amt;
+    // the position of the ball. If the position of the ball origitates at a certain location and the ball goes a certain way,
+    // the robot will move to intercept
+    float x_position, y_position;
+    // vairiable which determines if the ball is going up or down upon collision
+    float up_or_down;
+    // speed multiplier which impacts the speed at which the ball moves across the screen
+    float speed_multiplier;
+};
+
+/*
+This class generated the functions reguarding the main menu. The first 2 functions generate the initial screen buttons and touch detection functionality.
+The backbut and startbut state what happens if you touch the back button or the start button (because it required a special case from the other main menu buttons)
+Replay and play again generate a screen which allow you replay the game or go back to the main menu
+The variables are required to check for touch and account for statistics. These vairiables keep track of the location of the cursor when "touching" the screen
+This class was created by Ervin
+*/
+class main_menu
+{
+public:
+    void generate_buttons();
+    void maintouch();
+    void backbut();
+    void startbut();
+    void replay_screen();
+    void difficulty_level_screen();
+
+private:
+    float x_position, y_position;
+};
+
+// starts int main
+int main()
+{
+
+    LCD.SetBackgroundColor(BLACK);
+    LCD.Clear();
+
+    // only one function is ran in int main. This one function has paths to all of the other functions and objects in the code
+    main_menu instance;
+
+    instance.generate_buttons();
+
+    return 0;
+}
+
+// This function generates the buttons on the first page you see. It generates the title, start game, see stats, how to play, and credits buttons.
+// This function was created by Ervin
+void main_menu::generate_buttons()
+{
+    paddle diff;
+    // Title
+    LCD.SetFontColor(RED);
+    LCD.WriteAt("Ultimate Pong", 80, 40);
+
+    // creating start game button
+    LCD.SetFontColor(GREEN);
+    LCD.DrawRectangle(10, 80, 300, 30);
+    LCD.WriteAt("Start Game", 90, 85);
+
+    // creating How to Play Button=
+    LCD.SetFontColor(BLUE);
+    LCD.DrawRectangle(10, 120, 300, 30);
+    LCD.WriteAt("How To Play", 90, 125);
+
+    // creating See Stats button
+    LCD.SetFontColor(DARKSALMON);
+    LCD.DrawRectangle(10, 160, 300, 30);
+    LCD.WriteAt("Statistics", 90, 165);
+
+    // Creating credits button
+    LCD.SetFontColor(PINK);
+    LCD.DrawRectangle(10, 200, 300, 30);
+    LCD.WriteAt("Credits", 90, 205);
+
+    // touching buttons function is called here
+    maintouch();
+}
+
+// This function checks for the touch at different locations of the main menu screen. 
+// Additionally, it tells the program what to do depending on which button is clicked. For example, if the start game box is clicked, a back button will be generated and the 3 difficulty buttons will too. 
+// It will then call a function to determine the click of those buttons.
+// This function was created by Ervin
+void main_menu::maintouch()
+{
+    // creates while loop structure that is indefinite unless there is a break
+    while (1)
+    {
+        // if someone is touching the screen
+        if (LCD.Touch(&x_position, &y_position))
+        {
+            // if you click within the start button area
+            if (y_position >= 80 && y_position <= 110 && x_position >= 10 && x_position <= 310)
+            {
+                // initialize difficulty mode buttons
+                //  Back Button
+                LCD.SetBackgroundColor(BLACK);
+                LCD.Clear();
+                LCD.SetFontColor(WHITE);
+                LCD.DrawRectangle(0, 0, 60, 30);
+                LCD.WriteAt("Back", 5, 7);
+
+                // difficulty buttons
+                LCD.SetFontColor(GREEN);
+                LCD.DrawRectangle(10, 75, 300, 30);
+                LCD.SetFontColor(YELLOW);
+                LCD.DrawRectangle(10, 115, 300, 30);
+                LCD.SetFontColor(RED);
+                LCD.DrawRectangle(10, 155, 300, 30);
+                LCD.SetFontColor(WHITE);
+                LCD.WriteAt("Choose your level: ", 55, 45);
+                LCD.SetFontColor(GREEN);
+                LCD.WriteAt("Easy", 125, 82);
+                LCD.SetFontColor(YELLOW);
+                LCD.WriteAt("Medium", 125, 122);
+                LCD.SetFontColor(RED);
+                LCD.WriteAt("Hard", 125, 162);
+                Sleep(100);
+                // calling back button touch function
+                startbut();
+
+                break;
+            }
+
+            // How to play button and instructions
+            if (y_position >= 120 && y_position <= 150 && x_position >= 10 && x_position <= 310)
+            {
+                // Back button
+                LCD.SetBackgroundColor(BLACK);
+                LCD.Clear();
+                LCD.SetFontColor(WHITE);
+                LCD.DrawRectangle(0, 0, 60, 30);
+                LCD.WriteAt("Back", 5, 7);
+
+                // printed instructions
+                LCD.WriteAt("Instructions:", 25, 40);
+                LCD.DrawRectangle(0, 65, 320, 160);
+                LCD.WriteAt("1.Click the mouse and drag ", 7, 70);
+                LCD.WriteAt("to move the paddle", 29, 87);
+                LCD.WriteAt("2.Never unclick the paddle", 7, 110);
+                LCD.WriteAt("3.Hit the ball", 7, 130);
+                LCD.WriteAt("4.Hit the wall behind your ", 7, 150);
+                LCD.WriteAt("opponent to score", 29, 170);
+                LCD.WriteAt("5.Score is tracked in", 7, 190);
+                LCD.WriteAt("in stats", 7, 210);
+                LCD.WriteAt("", 29, 197);
+                y_position = -10;
+                Sleep(100);
+                // Calling back button function
+                backbut();
+
+                break;
+            }
+
+            // Stats button
+            if (y_position >= 160 && y_position <= 190 && x_position >= 10 && x_position <= 310)
+            {
+
+                // Back button
+                LCD.SetBackgroundColor(BLACK);
+                LCD.Clear();
+                LCD.SetFontColor(WHITE);
+                LCD.DrawRectangle(0, 0, 60, 30);
+                LCD.WriteAt("Back", 5, 7);
+
+                // printed stats using global vairiables robot_losses and human_losses to determine how many wins and losses the human player has
+                LCD.DrawRectangle(35, 75, 250, 30);
+                LCD.DrawRectangle(35, 110, 250, 30);
+                LCD.SetFontColor(DARKSALMON);
+                LCD.WriteAt("Statistics: ", 35, 60);
+                LCD.SetFontColor(WHITE);
+                LCD.WriteAt("Wins: ", 35, 80);
+                LCD.WriteAt(robot_losses, 90, 80);
+                LCD.WriteAt("Losses: ", 35, 116);
+                LCD.WriteAt(human_losses, 116, 116);
+
+                y_position = -10;
+                Sleep(100);
+                // Back button touch
+                backbut();
+
+                break;
+            }
+
+            // Credits  button
+            if (y_position >= 200 && y_position <= 230 && x_position >= 10 && x_position <= 310)
+            {
+                // Back button
+                LCD.SetBackgroundColor(BLACK);
+                LCD.Clear();
+                LCD.SetFontColor(WHITE);
+                LCD.DrawRectangle(0, 0, 60, 30);
+                LCD.WriteAt("Back", 5, 7);
+
+                // printed credits
+                LCD.WriteAt("Credits: ", 100, 63);
+                LCD.WriteAt("Made by: ", 110, 79);
+                LCD.WriteAt("Ervin Cui", 110, 94);
+                LCD.WriteAt("Elijah Mansur", 110, 109);
+
+                // Calling back button function
+                backbut();
+                break;
+            }
+        }
+        LCD.Update();
+        // Never end unless there is a break which ends the code
+    }
+}
+
+// This function tells the simulator what to do when the back button is clicked.
+// Its only purpose is to re-generate the main menu screen when the back button is clicked.
+// This function was created by Ervin
+void main_menu::backbut()
+{
+    while (1)
+    {
+        // screen touch
+        if (LCD.Touch(&x_position, &y_position))
+        {
+            // the back button is pushed
+            if (y_position >= 0 && y_position <= 30 && x_position >= 0 && x_position <= 60)
+            {
+                LCD.SetBackgroundColor(BLACK);
+                LCD.Clear();
+                // the home screen buttons are called
+                generate_buttons();
+                break;
+            }
+        }
+    }
+}
+
+/*
+This function generates the difficulty level buttons but does not detect clicks. The startbut functiond detects clicks.
+This function was created by Ervin
+*/
+void main_menu::difficulty_level_screen()
+{
+
+    // Back Button
+    LCD.SetBackgroundColor(BLACK);
+    LCD.Clear();
+    LCD.SetFontColor(WHITE);
+    LCD.DrawRectangle(0, 0, 60, 30);
+    LCD.WriteAt("Back", 5, 7);
+
+    // difficulty buttons
+    LCD.SetFontColor(GREEN);
+    LCD.DrawRectangle(10, 75, 300, 30);
+    LCD.SetFontColor(YELLOW);
+    LCD.DrawRectangle(10, 115, 300, 30);
+    LCD.SetFontColor(RED);
+    LCD.DrawRectangle(10, 155, 300, 30);
+    LCD.SetFontColor(WHITE);
+    LCD.WriteAt("Choose your level: ", 55, 45);
+    LCD.SetFontColor(GREEN);
+    LCD.WriteAt("Easy", 125, 82);
+    LCD.SetFontColor(YELLOW);
+    LCD.WriteAt("Medium", 125, 122);
+    LCD.SetFontColor(RED);
+    LCD.WriteAt("Hard", 125, 162);
+    Sleep(100);
+    // initializing starbutton functionality which allows the user to click a mode button and start the game. The function is below
+    startbut();
+}
+
+/*
+Clicking the start button is a special case. Thus, this function is dedicated specifically to what happens after clicking the start button.
+If the start button is touched, the easy, medium, and hard mode buttons are iniitlaized. If you click the easy mode button, the game is initialized
+where your paddle is bigger than in more difficult modes. This function is the bridge between the main menu and the game.
+This function was created by Ervin
+*/
+void main_menu::startbut()
+{
+    int f = 1; // counter vairiable to check if the player started the game
+    paddle pad;
+    backbutton_integer = 1;
+    // while one of the game mode buttons have not been clicked
+    while (f == 1)
+    {
+        // if there is a screen click
+        if (LCD.Touch(&x_position, &y_position))
+        {
+            // back button function. The main menu is generated and the other buttons are cleared
+            if (y_position >= 0 && y_position <= 30 && x_position >= 0 && x_position <= 60)
+            {
+                backbutton_integer = 0;
+                LCD.SetBackgroundColor(BLACK);
+                LCD.Clear();
+                generate_buttons();
+            }
+
+            // while the back button wasn't pushed (backbutton_integer = 1), and when the screen is being touched
+            while (backbutton_integer == 1 && LCD.Touch(&x_position, &y_position))
+            {
+                // easy, medium, or hard buttons and their cartesian coordinates
+                if (y_position >= 75 && y_position <= 105 && x_position >= 10 && x_position <= 310)
+                {
+                    // a button was pushed, so backbutton_integer = 0. You cannot go back to the screen until the game finishes
+                    backbutton_integer = 0;
+                    LCD.SetBackgroundColor(BLACK);
+                    LCD.Clear();
+                    while (f == 1)
+                    {
+                        // the game is initialized with the start_ball and velocity functions
+                        pong_ball begin;
+                        begin.start_ball(160, 120);
+                        begin.velocity(150, 100, 2);
+                        f = 0;
+                    }
+                    break;
+                }
+
+                // medium level button
+                else if (y_position >= 115 && y_position <= 145 && x_position >= 10 && x_position <= 310)
+                {
+                    backbutton_integer = 0;
+                    LCD.SetBackgroundColor(BLACK);
+                    LCD.Clear();
+
+                    while (f == 1)
+                    {
+                        // initializing game
+                        pong_ball begin;
+                        begin.start_ball(160, 120);
+                        begin.velocity(150, 100, 1);
+                        f = 0;
+                    }
+                    break;
+                }
+
+                // hard level button
+                else if (y_position >= 155 && y_position <= 185 && x_position >= 10 && x_position <= 310)
+                {
+                    backbutton_integer = 0;
+                    LCD.SetBackgroundColor(BLACK);
+                    LCD.Clear();
+                    while (f == 1)
+                    {
+                        // initializing game
+                        pong_ball begin;
+                        begin.start_ball(160, 120);
+                        begin.velocity(150, 100, 0);
+                        f = 0;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    // when the game is finished, the function exits the while loop above and goes to this section. If the game was played,
+    // f=0. Now the replay options screen is generated.
+    if (f == 0)
+    {
+        Sleep(2.0);
+        LCD.SetBackgroundColor(BLACK);
+        LCD.Clear();
+        main_menu instance;
+        instance.replay_screen();
+    }
+}
+
+/*
+This function generates the screen after a game is over. It also tells the simulator what to generate depending on which choice is selected after the game.
+This function was created by Elijah
+*/
+void main_menu::replay_screen()
+{
+
+    LCD.SetFontColor(BLUE);
+    LCD.DrawRectangle(10, 120, 300, 30);
+    LCD.WriteAt("Play Again?", 90, 125);
+
+    LCD.SetFontColor(DARKSALMON);
+    LCD.DrawRectangle(10, 160, 300, 30);
+    LCD.WriteAt("Yes button", 90, 165);
+
+    LCD.SetFontColor(PINK);
+    LCD.DrawRectangle(10, 200, 300, 30);
+    LCD.WriteAt("No button", 90, 205);
+
+    // never ending loop unless the user does something
+    while (1)
+    {
+        // detecting touch
+        if (LCD.Touch(&x_position, &y_position))
+        {
+            // if you select play again, this function sends you the difficulty_level_screen function
+            if (y_position >= 160 && y_position <= 190 && x_position >= 10 && x_position <= 310)
+            {
+                LCD.SetBackgroundColor(BLACK);
+                LCD.Clear();
+                main_menu access;
+                access.difficulty_level_screen();
+                break;
+            }
+        }
+
+        else if (LCD.Touch(&x_position, &y_position))
+        {
+            // if you select that you do not want to play again, you are sent to the main menu
+            if (y_position >= 200 && y_position <= 230 && x_position >= 10 && x_position <= 310)
+            {
+                LCD.SetBackgroundColor(BLACK);
+                LCD.Clear();
+
+                main_menu access;
+                access.generate_buttons();
+                break;
+            }
+        }
+    }
+}
+
+// This function generates the ball with the initial x and y positions for where it spaws.
+// This function was created by Elijah
+void pong_ball::start_ball(int x, int y)
+{
+
+    LCD.FillCircle(x, y, 5);
+    x_in = x;
+    y_in = y;
+}
+
+/*
+This function determines the velocity of the ball. It takes the inputs x, y, and mode. Mode is 0,1, or 2. 0 for hard, 1 for medium, and 2 for easy.
+The initial position is first defined. A speed multiplier is used to increase the speed of the ball over time. The function utlizes a switch
+case to detect which direction the ball starts moving in. If the ball direction is 1, for example, the ball goes to the top right.
+The while loops in the switch statement run until there is a collision and then the ball direction is switched and respected
+location in the switch is also moved. This function also checks for a collision. If there is a collision, the balls speed will increase by
+10%. This function also managed losing or wining game conditions. If the ball hits the vertical walls (based on coordinate positions), the game will
+end and you will be sent to the play again function screen.
+This function was made by Elijah
+*/
+void pong_ball::velocity(int x, int y, int mode)
+{
+    // defining the initial position for the ball
+    x_new = x_in;
+    y_new = y_in;
+
+    // randomizing the initial ball direction
+    ball_direction = rand() % 4 + 1;
+    ball_direction = 4;
+    // the speed of the ball starts at 100% of its speed and increases
+    speed_multiplier = 1.0;
+    LCD.DrawRectangle(0, 0, 320, 239);
+
+    // counting vairable. z = 1 means thhe game is going on
+    int z = 1;
+
+    // initial center robot position (where the center of the robot is). The robot starts in the upper right hand corner
+    center_robot_position = 50;
+
+    // initializng the object run
+    paddle run;
+
+    // sets initial conditions for the robot paddle
+    run.run_once();
+
+    // while the game is being played
+    while (z == 1)
+    {
+        // initialize the paddle and pong_ball objects named test and trackinb
+        paddle test;
+        pong_ball tracking;
+
+        // switch case for the ball direction. The ball can go in one of four directions and this switch case defines what happens in each case
+        switch (ball_direction)
+        {
+        // Ball going to top left
+        case 1:
+            // while there is no break the function runs
+            while (1)
+            {
+                // the ball spawned and cannot spawn again
+                ball_spawn = 0;
+
+                // initializes drag paddle function
+                test.drag_paddle(x_new, y_new, ball_direction, mode);
+
+                // filling in old ball position with black
+                LCD.SetFontColor(BLACK);
+                LCD.FillCircle(x_new, y_new, 5);
+
+                // defining the new positions of the ball with the speed multiplier
+                x_new = x_new - 3 * speed_multiplier;
+                y_new = y_new - 3 * speed_multiplier;
+
+                // defining the position of the robot paddle and initializing the color
+                LCD.SetFontColor(RED);
+                LCD.FillCircle(x_new, y_new, 5);
+
+                // if there is a collision with the wall
+                if (y_new < 1)
+                {
+                    // the switch case moves to 3
+                    ball_direction = 3;
+                    break;
+                }
+
+                // if there is a collision with the paddle
+                else if (collide == 1)
+                {
+                    // ball_direction is equal to global var which is a vairiable modified in the collision function.
+                    // This determines which direction the balll will move next
+                    ball_direction = global_var;
+                    // 1 is up. The ball will collide with the paddle and go up
+                    tracking.ball_tracking(x_new, y_new, 1);
+                    // the speed is increased
+                    speed_multiplier = (speed_multiplier)*1.1;
+                    // the collision counter is set to 0 so the ball isn't infinetly colliding with something
+                    collide = 0;
+                    break;
+                }
+
+                // win condition for the robot on the far left of the screen
+                else if (x_new < 1)
+                {
+                    // the human player lost. The game  is over
+                    z = 0;
+
+                    // calling function that increments the wins and losses for the player
+                    tracking.resource_tracking(true);
+                    break;
+                }
+
+                // the while loop is going on until one of the above special conditions are met
+                LCD.Update();
+            }
+            break;
+
+        // going to top right
+        case 2:
+            while (1)
+            {
+                // the ball started in case 2, the robot has to reply to the ball first, so the robot begins the ball tracking function to move to where it is needed
+                if (ball_spawn == 1)
+                {
+                    // the ball is going up
+                    tracking.ball_tracking(x_new, y_new, 1);
+                    // now that the ball has spawned, this if loop will not be used for the rest of the game
+                    ball_spawn = 0;
+                }
+
+                // described in switch case 1
+                test.drag_paddle(x_new, y_new, ball_direction, mode);
+                LCD.SetFontColor(BLACK);
+                LCD.FillCircle(x_new, y_new, 5);
+
+                x_new = x_new + 3 * speed_multiplier;
+                y_new = y_new - 3 * speed_multiplier;
+
+                LCD.SetFontColor(RED);
+                LCD.FillCircle(x_new, y_new, 5);
+
+                // if colliding with top wall, mirror y axis velocity by going to direction 4
+                if (y_new < 1)
+                {
+                    ball_direction = 4;
+                    break;
+                }
+
+                else if (collide == 1)
+                {
+                    ball_direction = global_var;
+                    collide = 0;
+                    speed_multiplier = (speed_multiplier)*1.1;
+                    break;
+                }
+
+                // win condition for the human
+                else if (x_new > 320)
+                {
+                    LCD.WriteAt("You won this round! The robot lost.", 80, 40);
+                    tracking.resource_tracking(false);
+                    z = 0;
+                    break;
+                }
+
+                LCD.Update();
+            }
+            break;
+
+        // going to bottom left
+        case 3:
+            ball_spawn = 0;
+
+            while (1)
+            {
+                test.drag_paddle(x_new, y_new, ball_direction, mode);
+                LCD.SetFontColor(BLACK);
+                LCD.FillCircle(x_new, y_new, 5);
+
+                x_new = x_new - 3 * speed_multiplier;
+                y_new = y_new + 3 * speed_multiplier;
+
+                LCD.SetFontColor(RED);
+                LCD.FillCircle(x_new, y_new, 5);
+
+                if (y_new > 230)
+                {
+                    ball_direction = 1;
+                    break;
+                }
+
+                else if (collide == 1)
+                {
+                    ball_direction = global_var;
+                    tracking.ball_tracking(x_new, y_new, 0);
+                    speed_multiplier = (speed_multiplier)*1.1;
+                    collide = 0;
+                    break;
+                }
+
+                else if (x_new < 1)
+                {
+                    LCD.WriteAt("Uh oh, you lost", 80, 40);
+                    z = 0;
+                    tracking.resource_tracking(true);
+
+                    // the human player lost
+                    break;
+                }
+
+                LCD.Update();
+            }
+            break;
+
+        // going to bottom right
+        case 4:
+            while (1)
+            {
+                // checking if the ball was spawnd
+                if (ball_spawn == 1)
+                {
+                    // the ball is going down
+                    tracking.ball_tracking(x_new, y_new, 0);
+                    ball_direction = 0;
+                }
+
+                LCD.SetFontColor(BLACK);
+                LCD.FillCircle(x_new, y_new, 5);
+                test.drag_paddle(x_new, y_new, ball_direction, mode);
+                x_new = x_new + 3 * speed_multiplier;
+                y_new = y_new + 3 * speed_multiplier;
+
+                LCD.SetFontColor(RED);
+                LCD.FillCircle(x_new, y_new, 5);
+
+                if (y_new > 230)
+                {
+                    ball_direction = 2;
+                    break;
+                }
+
+                else if (collide == 1)
+                {
+                    ball_direction = global_var;
+                    speed_multiplier = (speed_multiplier)*1.1;
+                    collide = 0;
+                    break;
+                }
+
+                else if (x_new > 320)
+                {
+                    LCD.WriteAt("You won this round! The robot lost.", 80, 40);
+                    tracking.resource_tracking(false);
+                    z = 0;
+                    x = 1;
+                    break;
+                }
+                LCD.Update();
+            }
+            break;
+        }
+
+        LCD.Update();
+    }
+} // end pong ball function
+
+/*This function initializes the ability to drag the paddle with a mouse click input. Additionally, this function also moves the computer paddle according to the amount of "loops" or times it should move across the screen.
+It takes 4 integer inputs. x_new and y_new are used to determine the direction the new paddle is being dragged in. Mode determines the paddle size.
+ball_direction is an input into the collision function. Specifically for the paddle drag, it checks if you are touching the screen. If you are, a new box will be generated based on your click position.
+This function also elimnates the old paddle that was left behind based on the position of the new paddle. Finally, if you stop clicking, an infinite while loop generates a permanent box on the screen where you last stopped clicking.
+This function was made by Elijah.
+*/
+void paddle::drag_paddle(float x_new, float y_new, int ball_direction, int mode)
+{
+
+    //drawing roobt paddle
+    LCD.SetFontColor(RED);
+    LCD.DrawRectangle(280, robot_y, 20, 100);
+
+    // if i2, a loop counter, is less than the amount of needed loops. This if statmenet acts like a for loop because the function drag_paddle is called tons of times
+    if (i2 < loop_amt2)
+    {
+        // if paddle has to move down
+        if (up_or_down2 == 0)
+        { 
+            // the robot moving down
+            robot_y = robot_y + 4;
+            // the center of the robot paddle
+            center_robot_position = robot_y + 50;
+            LCD.SetFontColor(BLACK);
+            LCD.DrawRectangle(280, robot_y - 4, 20, 100);
+            LCD.SetFontColor(RED);
+            LCD.DrawRectangle(280, robot_y, 20, 100);
+        }
+        else if (up_or_down2 == 1)
+        { // the paddle has to move up
+            robot_y = robot_y - 4;
+            // because the center of the robot is 50 below the top edge
+            center_robot_position = robot_y + 50;
+            LCD.SetFontColor(BLACK);
+            LCD.DrawRectangle(280, robot_y + 4, 20, 100);
+            LCD.SetFontColor(RED);
+            LCD.DrawRectangle(280, robot_y, 20, 100);
+        }
+        // incrementing the loop counter
+        i2++;
+    }
+
+    // the size of the y axis of the robot paddle
+    // when the mode is 0, the paddle is 20 y axis units in width. The other modes also follow the equation
+    y_paddle_width = (mode + 1) * 20;
+    // min and max robot paddle bounds
+    robot_paddle_minimum = robot_y;
+    robot_paddle_maximum = robot_y + 100;
+
+    // while the paddle is being touched
+    if (LCD.Touch(&x_click, &y_click))
+    {
+        // reset box that creates a black box that elimates any extra boxes
+        LCD.SetFontColor(BLACK);
+
+        // formula for mode: easy = 60, med = 40, hard = 20 (y axis grid space)
+        LCD.DrawRectangle(20, reset_var, 20, y_paddle_width);
+
+        // creates a new box at the new position
+        LCD.SetFontColor(RED);
+        LCD.DrawRectangle(20, y_click, 20, y_paddle_width);
+        pong_ball test;
+
+        // range of y values where the paddle is located at this moment
+        paddle_minimum = y_click;
+
+        // determines the max and min range of the paddle and y_paddle_width is different for different modes
+        paddle_maximum = y_click + y_paddle_width;
+        paddle_y_line = 40;
+        // checking to see if there was a collision
+        test.collision(paddle_minimum, paddle_maximum, paddle_y_line, x_new, y_new, ball_direction, robot_paddle_minimum, robot_paddle_maximum);
+
+        // defining the ball direction in terms of a global vairiable that can be accessed by other functions 
+        if (collide == 1)
+        {
+            switch (global_var)
+            {
+            case 1:
+                ball_direction = global_var;
+                break;
+            case 2:
+                ball_direction = global_var;
+                break;
+            case 3:
+                ball_direction = global_var;
+                break;
+            case 4:
+                ball_direction = global_var;
+                break;
+            }
+        }
+
+        Sleep(0.025);
+        // eliminates the old box, and when the mouse moves, a new box will be generated on the next loop
+        LCD.SetFontColor(BLACK);
+        LCD.DrawRectangle(20, y_click, 20, y_paddle_width);
+
+        // if you stop clicking while in the loop, the old boxes dissapear and a permanent box is present
+        while (!LCD.Touch(&x_click, &y_click))
+        {
+            LCD.SetFontColor(RED);
+            LCD.DrawRectangle(20, y_click, 20, y_paddle_width);
+            reset_var = y_click;
+
+            break;
+        }
+    }
+}
+
+/*
+This determines if there is a collision with pong ball and with the human and robot paddles. The paddle_min and max functions are the min and max positions
+for the human paddle. The paddle_y_line is the point of the x-axis where the paddle is. x_new and y_new define the new positon of the ball. The ball direction defines
+if it going up right, down right, down left, or up left. The robot paddle min and max define the min and max positions for the robot paddle used to detect collisons.
+This function seperates between the human and robot paddle and determines which of the human or robot collided with the ball.
+This function was created by Elijah
+*/
+void pong_ball::collision(float paddle_minimum, float paddle_maximum, float paddle_y_line, float x_new, float y_new, int ball_direction, float robot_paddle_minimum, float robot_paddle_maximum)
+{
+    // Switch case which determines which paddle the ball hits. Case 1 and 3 are cases for the human cases and the other cases for the robot paddle.
+    switch (ball_direction)
+    {
+    case 1:
+        // the ball is behind the human paddle
+        if (x_new < paddle_y_line)
+        {
+            // if the balls y coordinates are within the human paddle min and max positions
+            if (paddle_minimum <= y_new && y_new <= paddle_maximum)
+            {
+                // this global vairable will change the direction of the ball in the velocity function
+                global_var = 2;
+                // says that the ball has "collided". Will talk to other functions to reverse the direction of the ball
+                collide = 1;
+                break;
+            }
+        }
+        break;
+
+    case 2:
+        // the ball is behind the robot paddle
+        if (x_new >= 280 && x_new <= 319)
+        {
+            // if the ball is within the robot paddle bounds
+            if (robot_paddle_minimum <= y_new && y_new <= robot_paddle_maximum)
+            {
+                // change bal direction in velocity function and report collision
+                global_var = 1;
+                collide = 1;
+                break;
+            }
+        }
+        break;
+
+    // similar to case 1, mirrored
+    case 3:
+        if (x_new < paddle_y_line)
+        {
+            if (paddle_minimum <= y_new && y_new <= paddle_maximum)
+            {
+
+                global_var = 4;
+                collide = 1;
+                break;
+            }
+        }
+        break;
+    // similar to case 2, mirrored
+    case 4:
+        if (x_new >= 280 && x_new <= 319)
+        {
+
+            if (robot_paddle_minimum <= y_new && y_new <= robot_paddle_maximum)
+            {
+
+                collide = 1;
+                global_var = 3;
+                break;
+            }
+        }
+    }
+} // end of collision function
+
+/*
+This function takes the x_position and y_position of the ball when it collides with the human paddle. Only when the ball collides with the human
+paddle does the robot move to the position it needs to hit the ball back. The up or down int indicates if the ball is moving up or down after a collision
+with the human paddle. This function is responsible for predicting where the robot should move when the ball hits the paddle or it spawned.
+This function was created by Elijah
+*/
+void pong_ball::ball_tracking(float x_position, float y_position, int up_or_down)
+{
+
+    paddle communicate_with_drag_paddle;
+
+    // the position of the ball during the collision is greater than 160. This means that the ball was just spawned.
+    if (x_position == 160)
+    {
+        // the  ball is moving to the top of the screen after spawing
+        if (up_or_down == 1)
+        {
+            ball_spawn = 0;
+
+            //  the robot has to do nothing because the ball will reach the top of the screen where the robot starts initially
+        }
+        // the ball is moving to the bottom of the screen
+        else if (up_or_down == 0)
+        {
+            ball_spawn = 0;
+
+            // the amount of translational loops the robot should move through in the drag_paddle function
+            loop_amt = 45;
+            communicate_with_drag_paddle.talk(0, 0, loop_amt);
+        }
+    }
+
+    // the ball will be going to the top right and the ball collided with the paddle
+    else if (up_or_down == 1)
+    {
+        // vertical distance to travel to the top of the screen
+        distance_to_travel_y = y_position;
+
+        // because 45 45 triangles the distance to travel x to the top of of the screen is the same as the distance to travel y
+        distance_to_travel_x = distance_to_travel_y;
+
+        // 240 is the distance between the paddles. The y end position is 240 - the distance the ball has to travel to the top of the screen.
+        // This is the predicted end position of the ball
+        y_end_position = 240 - (distance_to_travel_x);
+
+        // if the center of the robot is at a higher position that the end position of the ball
+        if (center_robot_position < y_end_position)
+        {
+
+            // number of loops the paddle has to reach the ball by using the difference between the expected end position of the ball and the center of the robot
+            loop_amt = (y_end_position - center_robot_position) / 4;
+
+            // saves the vairiables for the talk function as global vairiables to be used by the drag_paddle function
+            communicate_with_drag_paddle.talk(0, 0, loop_amt);
+        }
+
+        // the robot is lower than the predicted end position of the ball
+        else if (center_robot_position >= y_end_position)
+        {
+
+            loop_amt = (center_robot_position - y_end_position) / 4;
+            communicate_with_drag_paddle.talk(0, 1, loop_amt);
+        }
+    }
+
+    // the ball will be going to the bottom right
+    else if (up_or_down == 0)
+    {
+
+        // these lines work similar to the above lines for the first set of ifs
+        y_end_position = 240 - y_position;
+
+        if (center_robot_position < y_end_position)
+        {  
+             // the paddle is higher than the ball
+            // number of loops the paddle has to reach the ball
+            loop_amt = (y_end_position - center_robot_position) / 4;
+            communicate_with_drag_paddle.talk(0, 0, loop_amt);
+        }
+
+        else if (center_robot_position >= y_end_position)
+        { // the paddle is lower than the ball
+            loop_amt = (center_robot_position - y_end_position) / 4;
+            communicate_with_drag_paddle.talk(0, 1, loop_amt);
+        }
+    }
+}
+
+// this function was created by Elijah. 
+// Setting initial postions for the robot paddle 
+void paddle::run_once()
+{
+    while (e == 1)
+    {
+        robot_y = 10;
+        robot_reset = 50;
+        e = 2;
+    }
+}
+
+// this function was created by Elijah 
+// This function sends the loop amount, up or down, and loop counting vairiable i to the drag_paddle function using global vairiables
+void paddle::talk(int i, int up_or_down, int loop_amt)
+{
+    loop_amt2 = loop_amt;
+    up_or_down2 = up_or_down;
+    i2 = i;
+}
+
+// This function was created by Elijah. 
+// This function tracks the amounts and wins and losses for the player. The bool did_human win is true if the human won and incrememnts the human won counter. 
+void pong_ball::resource_tracking(bool did_human_win)
+{
+    if (did_human_win)
+    {
+        (human_losses)++;
+    }
+    else
+    {
+        (robot_losses)++;
+    }
+}
